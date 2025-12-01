@@ -15,56 +15,32 @@ class NeuralNet:
     def preprocess(self):
         self.processed_data = self.raw_input.copy()
     
-        column_names = ['age', 'workclass', 'fnlwgt', 'education', 'education-num', 'marital-status', 'occupation', 'relationship', 'race', 'sex', 'capital-gain', 'capital-loss', 'hours-per-week', 'native-country', 'income' ]
+        column_names = ['S1', 'C1', 'S2', 'C2', 'S3', 'C3', 'S4', 'C4', 'S5', 'C5', 'CLASS']
 
         if self.processed_data.columns[0] == 0:
             self.processed_data.columns = column_names
 
-        #Missing values are noted by ?
-        self.processed_data.replace(' ?', np.nan, inplace=True)
-
-        #Drops rows with missing values
-        self.processed_data.dropna(inplace=True)
-
-        categorical_cols = self.processed_data.select_dtypes(include=['object']).columns.tolist()
-
-        target_col = 'income'
-        if target_col in categorical_cols:
-            categorical_cols.remove(target_col)
+        target_col = 'CLASS'
         
-        numerical_cols = self.processed_data.select_dtypes(include=['int64', 'float64']).columns.tolist()
+        numerical_cols = [col for col in column_names if col != 'CLASS']
         
-        
-        #Convert to binary: 0 for <=50K, 1 for >50K
-        self.processed_data[target_col] = self.processed_data[target_col].str.strip()
-        self.processed_data[target_col] = self.processed_data[target_col].apply(
-            lambda x: 1 if '>50K' in str(x) else 0
+        self.scaler = StandardScaler()
+        self.processed_data[numerical_cols] = self.scaler.fit_transform(
+            self.processed_data[numerical_cols]
         )
-
-        for col in categorical_cols:
-            self.processed_data[col] = self.processed_data[col].str.strip()
-        
-        #One-hot encoding  for categorical values
-        if len(categorical_cols) > 0:
-            self.processed_data = pd.get_dummies(
-                self.processed_data, 
-                columns=categorical_cols, 
-                drop_first=True
-            )
-        
-        if len(numerical_cols) > 0:
-            scaler = StandardScaler()
-            self.processed_data[numerical_cols] = scaler.fit_transform(
-                self.processed_data[numerical_cols]
-            )
         
         self.processed_data.reset_index(drop=True, inplace=True)
         
         # Optional: Print preprocessing summary
         print(f"\nOriginal dataset shape: {self.raw_input.shape}")
         print(f"Processed dataset shape: {self.processed_data.shape}")
-        print(f"Number of features after encoding: {len(self.processed_data.columns) - 1}")
-        print(f"Target distribution:\n{self.processed_data[target_col].value_counts()}")
+        print(f"Number of features: {len(numerical_cols)}")
+
+        # CHANGED: Show all 10 classes instead of binary
+        print(f"\nTarget distribution (Poker Hand Classes 0-9):")
+        class_counts = self.processed_data[target_col].value_counts().sort_index()
+        for cls, count in class_counts.items():
+            print(f"  Class {cls}: {count} samples ({count/len(self.processed_data)*100:.2f}%)")
         
         return 0
 
@@ -73,16 +49,15 @@ class NeuralNet:
         nrows = len(self.processed_data.index)
         X = self.processed_data.iloc[:, 0:(ncols - 1)]
         y = self.processed_data.iloc[:, (ncols-1)]
-        X_train, X_test, y_train, y_test = train_test_split(X, y)
-        
-        model = MLPClassifier()
+
+        self.self.X_train, self.X_test, self.self.y_train, self.y_test = train_test_split(X, y, test_size=0.2, random_state=0)
         
         activations = ['logistic', 'tanh', 'relu']
         learning_rate = [0.01, 0.1]
         max_iterations = [100, 200] 
         num_hidden_layers = [2, 3]
 
-        neurons_per_layer = 64;
+        neurons_per_layer = 64
 
         results = []
         all_histories = []
@@ -90,6 +65,8 @@ class NeuralNet:
         combinations = product(activations, learning_rate, max_iterations, num_hidden_layers)
 
         model_num = 0
+        best_model = None
+        best_test_acc = 0
         #Loop for training data and testing data models with each hyperparameter combination
         for activation, lr, max_iter, n_layers in combinations:
             model_num += 1
@@ -107,21 +84,25 @@ class NeuralNet:
                 random_state = 42
             )
 
-            model.fit(X_train, y_train)
+            model.fit(self.X_train, self.y_train)
 
-            y_train_predict = model.predict(X_train)
-            train_rmse = np.sqrt(mean_squared_error(y_train, y_train_predict))
-            train_mse = mean_squared_error(y_train, y_train_predict)
-            train_r2 = model.score(X_train, y_train)
+            y_train_predict = model.predict(self.X_train)
+            train_rmse = np.sqrt(mean_squared_error(self.y_train, y_train_predict))
+            train_mse = mean_squared_error(self.y_train, self.y_train_predict)
+            train_r2 = model.score(self.X_train, self.y_train)
 
-            y_test_predict = model.predict(X_test)
-            test_rmse = np.sqrt(mean_squared_error(y_test, y_test_predict))
-            test_mse = mean_squared_error(y_test, y_test_predict)
-            test_r2 = model.score(X_test, y_test)
+            y_test_predict = model.predict(self.X_test)
+            test_rmse = np.sqrt(mean_squared_error(self.y_test, y_test_predict))
+            test_mse = mean_squared_error(self.y_test, y_test_predict)
+            test_r2 = model.score(self.X_test, self.y_test)
 
             #Loss, what we will plot against epochs
-            train_accuracy = accuracy_score(y_train, y_train_predict)
-            test_accuracy = accuracy_score(y_test, y_test_predict)
+            train_accuracy = accuracy_score(self.y_train, self.y_train_predict)
+            test_accuracy = accuracy_score(self.y_test, y_test_predict)
+
+            if test_accuracy > best_test_acc:
+                best_test_acc = test_accuracy
+                best_model = model
 
             results.append({
                 'activation': activation,
@@ -198,3 +179,5 @@ if __name__ == "__main__":
     neural_network = NeuralNet(url) 
     neural_network.preprocess()
     neural_network.train_evaluate()
+
+
