@@ -6,6 +6,7 @@ from sklearn.neural_network import MLPClassifier
 from sklearn.metrics import accuracy_score, mean_squared_error
 import matplotlib.pyplot as plt
 from itertools import product
+import pickle
 
 
 class NeuralNet:
@@ -50,45 +51,49 @@ class NeuralNet:
         X = self.processed_data.iloc[:, 0:(ncols - 1)]
         y = self.processed_data.iloc[:, (ncols-1)]
 
-        self.self.X_train, self.X_test, self.self.y_train, self.y_test = train_test_split(X, y, test_size=0.2, random_state=0)
+        self.X_train, self.X_test, self.y_train, self.y_test = train_test_split(X, y, test_size=0.2, random_state=0)
         
-        activations = ['logistic', 'tanh', 'relu']
-        learning_rate = [0.01, 0.1]
-        max_iterations = [100, 200] 
-        num_hidden_layers = [2, 3]
-
+        model_configs = [
+            {'activation': 'relu', 'learning_rate': 0.01, 'max_iter': 100, 'hidden_layers': 2},
+            {'activation': 'relu', 'learning_rate': 0.01, 'max_iter': 200, 'hidden_layers': 2},
+            {'activation': 'relu', 'learning_rate': 0.1, 'max_iter': 100, 'hidden_layers': 2},
+            {'activation': 'relu', 'learning_rate': 0.01, 'max_iter': 100, 'hidden_layers': 3},
+        ]
         neurons_per_layer = 64
 
         results = []
         all_histories = []
 
-        combinations = product(activations, learning_rate, max_iterations, num_hidden_layers)
-
         model_num = 0
         best_model = None
         best_test_acc = 0
-        #Loop for training data and testing data models with each hyperparameter combination
-        for activation, lr, max_iter, n_layers in combinations:
-            model_num += 1
-
-            hidden_layer_sizes = (neurons_per_layer,) * n_layers
         
+        for config in model_configs:
+            model_num += 1
+            
+            activation = config['activation']
+            lr = config['learning_rate']
+            max_iter = config['max_iter']
+            n_layers = config['hidden_layers']
+            
+            hidden_layer_sizes = (neurons_per_layer,) * n_layers
+
             print(f"\nTraining Model {model_num}...")
             print(f"  Activation: {activation}, LR: {lr}, Epochs: {max_iter}, Layers: {n_layers}")
 
             model = MLPClassifier(
-                hidden_layer_sizes = hidden_layer_sizes,
-                activation = activation,
-                learning_rate_init = lr,
-                max_iter = max_iter,
-                random_state = 42
+                hidden_layer_sizes=hidden_layer_sizes,
+                activation=activation,
+                learning_rate_init=lr,
+                max_iter=max_iter,
+                random_state=0
             )
 
             model.fit(self.X_train, self.y_train)
 
             y_train_predict = model.predict(self.X_train)
             train_rmse = np.sqrt(mean_squared_error(self.y_train, y_train_predict))
-            train_mse = mean_squared_error(self.y_train, self.y_train_predict)
+            train_mse = mean_squared_error(self.y_train, y_train_predict)
             train_r2 = model.score(self.X_train, self.y_train)
 
             y_test_predict = model.predict(self.X_test)
@@ -97,12 +102,16 @@ class NeuralNet:
             test_r2 = model.score(self.X_test, self.y_test)
 
             #Loss, what we will plot against epochs
-            train_accuracy = accuracy_score(self.y_train, self.y_train_predict)
+            train_accuracy = accuracy_score(self.y_train, y_train_predict)
             test_accuracy = accuracy_score(self.y_test, y_test_predict)
 
             if test_accuracy > best_test_acc:
                 best_test_acc = test_accuracy
-                best_model = model
+                best_model = model  # Keep the actual sklearn model
+                best_activation = activation
+                best_lr = lr
+                best_epochs = max_iter
+                best_layers = n_layers
 
             results.append({
                 'activation': activation,
@@ -159,6 +168,9 @@ class NeuralNet:
         print("="*100)
 
         # Print summary statistics
+        print("\nSaving best model and data for adversarial attacks...")
+        with open('best_sklearn_model.pkl', 'wb') as f:
+            pickle.dump(best_model, f)  # Save the actual sklearn model here
         print("\n")
         print(f"Best Test Accuracy: {results_df['test_accuracy'].max():.4f}")
         best_model_idx = results_df['test_accuracy'].idxmax()
@@ -172,12 +184,20 @@ class NeuralNet:
         print(f"  - Test MSE: {best_model['test_mse']:.4f}")
         print("="*100)
 
+        print("\nSaving best model and data for adversarial attacks...")
+        with open('best_sklearn_model.pkl', 'wb') as f:
+            pickle.dump(best_model, f)
+        with open('scaler.pkl', 'wb') as f:
+            pickle.dump(self.scaler, f)
+        
+        # Save test data as numpy arrays
+        np.save('X_test.npy', self.X_test.values)
+        np.save('y_test.npy', self.y_test.values)
+
         return 0
 
 if __name__ == "__main__":
-    url = "https://raw.githubusercontent.com/armanesponda/AdverserialAttackML/refs/heads/main/poker-hand-testing.data?token=GHSAT0AAAAAADPEMUPCZQDMWP4ZQZ4TIQEE2JN5CGQ"
+    url = "https://raw.githubusercontent.com/armanesponda/PokerHandDataset/refs/heads/main/poker-hand-testing.data"
     neural_network = NeuralNet(url) 
     neural_network.preprocess()
     neural_network.train_evaluate()
-
-
