@@ -55,7 +55,6 @@ class NeuralNet:
         
         model_configs = [
             {'activation': 'relu', 'learning_rate': 0.01, 'max_iter': 100, 'hidden_layers': 2},
-            {'activation': 'relu', 'learning_rate': 0.01, 'max_iter': 200, 'hidden_layers': 2},
             {'activation': 'relu', 'learning_rate': 0.1, 'max_iter': 100, 'hidden_layers': 2},
             {'activation': 'relu', 'learning_rate': 0.01, 'max_iter': 100, 'hidden_layers': 3},
         ]
@@ -183,16 +182,6 @@ class NeuralNet:
         print(f"  - Test Accuracy: {best_model['test_accuracy']:.4f}")
         print(f"  - Test MSE: {best_model['test_mse']:.4f}")
         print("="*100)
-
-        print("\nSaving best model and data for adversarial attacks...")
-        with open('best_sklearn_model.pkl', 'wb') as f:
-            pickle.dump(best_model, f)
-        with open('scaler.pkl', 'wb') as f:
-            pickle.dump(self.scaler, f)
-        
-        # Save test data as numpy arrays
-        np.save('X_test.npy', self.X_test.values)
-        np.save('y_test.npy', self.y_test.values)
 
         return 0
 
