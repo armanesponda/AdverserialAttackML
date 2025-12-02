@@ -574,10 +574,6 @@ def main():
     print(f"Accuracy at ε={epsilons[-1]}:          {final_acc:.2f}%")
     print(f"Accuracy Drop:                 {baseline_acc - final_acc:.2f}%")
     print(f"Max Attack Success Rate:       {max(results['attack_success_rate']):.2f}%")
-    print("="*80)
-    print("\n✓ All results ready for your IEEE conference paper!")
-    print("="*80)
-
 
 if __name__ == "__main__":
     main()
