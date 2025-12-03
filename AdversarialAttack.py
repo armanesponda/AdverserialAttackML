@@ -1,8 +1,3 @@
-"""
-FGSM Adversarial Attack - Fixed and Complete
-Works with sklearn models by converting to PyTorch for gradient computation
-"""
-
 import torch
 import torch.nn as nn
 import numpy as np
@@ -15,10 +10,6 @@ import pickle
 
 
 class SKLearnToPyTorch(nn.Module):
-    """
-    Converts sklearn MLPClassifier to PyTorch for FGSM attacks
-    This allows us to compute gradients with respect to inputs
-    """
     def __init__(self, sklearn_model):
         super(SKLearnToPyTorch, self).__init__()
         
@@ -54,10 +45,7 @@ class SKLearnToPyTorch(nn.Module):
 
 
 class FGSMAttacker:
-    """
-    Fast Gradient Sign Method Attack - Implemented from scratch
-    No adversarial attack libraries used
-    """
+    #Fast Gradient Sign Method Attack
     
     def __init__(self, sklearn_model, device='cpu', log_dir='./logs'):
         self.device = device
@@ -74,7 +62,7 @@ class FGSMAttacker:
         self.experiment_log = []
         self.experiment_number = 1
         
-        print("✓ Model conversion complete")
+        print("Model conversion complete")
 
     def fgsm_attack(self, inputs, labels, epsilon):
         """
@@ -102,10 +90,8 @@ class FGSMAttacker:
         return perturbed_data.detach()
     
     def targeted_fgsm_attack(self, inputs, target_labels, epsilon):
-        """
-        Targeted FGSM attack - tries to make model predict a specific target class
-        Algorithm: x_adv = x - ε * sign(∇_x L(θ, x, y_target))
-        """
+        #Targeted FGSM attack - tries to make model predict a specific target class
+        
         inputs.requires_grad = True
         outputs = self.model(inputs)
         
@@ -118,15 +104,13 @@ class FGSMAttacker:
         data_grad = inputs.grad.data
         sign_data_grad = data_grad.sign()
         
-        # Subtract perturbation to minimize loss for target class
+        #Subtract perturbation to minimize loss for target class
         perturbed_data = inputs - epsilon * sign_data_grad
         
         return perturbed_data.detach()
     
     def evaluate_attack(self, X_test, y_test, epsilons=[0, 0.05, 0.1, 0.15, 0.2, 0.25, 0.3]):
-        """
-        Comprehensive evaluation of FGSM attack across different epsilon values
-        """
+        #Evaluates FSGM attack with different epsilon values
         results = {
             'epsilon': [],
             'accuracy': [],
@@ -155,37 +139,32 @@ class FGSMAttacker:
             total_l2_perturbation = 0.0
             total_linf_perturbation = 0.0
             
-            # Process in batches
+            #Batch Processing
             batch_size = 256
             for i in range(0, len(X_test), batch_size):
                 batch_X = X_tensor[i:i+batch_size]
                 batch_y = y_tensor[i:i+batch_size]
                 
                 if epsilon == 0:
-                    # Baseline - no attack
                     with torch.no_grad():
                         outputs = self.model(batch_X)
                         _, predicted = torch.max(outputs, 1)
                 else:
-                    # Get original predictions
                     with torch.no_grad():
                         original_outputs = self.model(batch_X)
                         _, original_preds = torch.max(original_outputs, 1)
                     
-                    # Generate adversarial examples
                     adv_batch = self.fgsm_attack(batch_X.clone(), batch_y, epsilon)
                     
-                    # Calculate perturbation metrics
                     perturbation = (adv_batch - batch_X).cpu().numpy()
                     total_l2_perturbation += np.linalg.norm(perturbation, ord=2, axis=1).sum()
                     total_linf_perturbation += np.abs(perturbation).max(axis=1).sum()
                     
-                    # Get adversarial predictions
                     with torch.no_grad():
                         outputs = self.model(adv_batch)
                         _, predicted = torch.max(outputs, 1)
                     
-                    # Count successful attacks
+                    #Number of successful attacks
                     successful_attacks += (original_preds != predicted).sum().item()
                 
                 correct += (predicted == batch_y).sum().item()
@@ -200,7 +179,7 @@ class FGSMAttacker:
             avg_l2 = 0 if epsilon == 0 else total_l2_perturbation / total
             avg_linf = 0 if epsilon == 0 else total_linf_perturbation / total
             
-            # Store results
+            #Store results
             results['epsilon'].append(epsilon)
             results['accuracy'].append(accuracy)
             results['total_samples'].append(total)
@@ -210,7 +189,7 @@ class FGSMAttacker:
             results['avg_perturbation_linf'].append(avg_linf)
             results['evaluation_time'].append(eval_time)
             
-            # Log experiment
+            # og experiment
             self._log_experiment(epsilon, accuracy, attack_success_rate, 
                                avg_l2, avg_linf, total, eval_time)
             
@@ -222,9 +201,6 @@ class FGSMAttacker:
         return results
     
     def evaluate_targeted_attack(self, X_test, y_test, epsilon=0.1, num_target_classes=10):
-        """
-        Evaluate targeted FGSM attacks across different target classes
-        """
         results = {
             'target_class': [],
             'success_rate': [],
@@ -243,7 +219,7 @@ class FGSMAttacker:
             total = 0
             total_confidence = 0.0
             
-            # Only attack samples not already in target class
+            #Only attack samples not already in target class
             mask = y_tensor != target_class
             if mask.sum() == 0:
                 continue
@@ -251,19 +227,17 @@ class FGSMAttacker:
             inputs = X_tensor[mask]
             labels = y_tensor[mask]
             
-            # Create target labels
             target_labels = torch.full_like(labels, target_class)
             
-            # Process in batches
+            #Batch Processing
             batch_size = 256
             for i in range(0, len(inputs), batch_size):
                 batch_X = inputs[i:i+batch_size]
                 batch_target = target_labels[i:i+batch_size]
                 
-                # Generate targeted adversarial examples
+                #Targeted adversarial examples
                 adv_inputs = self.targeted_fgsm_attack(batch_X, batch_target, epsilon)
                 
-                # Evaluate
                 with torch.no_grad():
                     outputs = self.model(adv_inputs)
                     probabilities = torch.softmax(outputs, dim=1)
@@ -291,31 +265,26 @@ class FGSMAttacker:
         return results
     
     def analyze_sample_predictions(self, X_test, y_test, epsilon=0.1, num_samples=10):
-        """
-        Detailed analysis of how FGSM affects individual samples
-        """
         X_tensor = torch.FloatTensor(X_test[:num_samples]).to(self.device)
         y_tensor = torch.LongTensor(y_test[:num_samples]).to(self.device)
         
-        # Get original predictions
+        #Get original predictions
         with torch.no_grad():
             original_outputs = self.model(X_tensor)
             original_probs = torch.softmax(original_outputs, dim=1)
             original_confidence, original_preds = torch.max(original_probs, 1)
         
-        # Generate adversarial examples
         adv_inputs = self.fgsm_attack(X_tensor.clone(), y_tensor, epsilon)
         
-        # Get adversarial predictions
+        #Get adversarial predictions
         with torch.no_grad():
             adv_outputs = self.model(adv_inputs)
             adv_probs = torch.softmax(adv_outputs, dim=1)
             adv_confidence, adv_preds = torch.max(adv_probs, 1)
         
-        # Calculate perturbation statistics
+        #Perturbation stats
         perturbation = (adv_inputs - X_tensor).cpu().numpy()
         
-        # Create detailed analysis DataFrame
         analysis_data = []
         for i in range(num_samples):
             sample_dict = {
@@ -335,7 +304,7 @@ class FGSMAttacker:
         
         analysis_df = pd.DataFrame(analysis_data)
         
-        # Print summary
+        #Summary
         print(f"\n{'='*80}")
         print(f"Sample-Level Analysis (Epsilon={epsilon})")
         print(f"{'='*80}")
@@ -385,10 +354,9 @@ class FGSMAttacker:
         """
         os.makedirs(save_path, exist_ok=True)
         
-        # Create figure with multiple subplots
         fig, axes = plt.subplots(2, 2, figsize=(15, 12))
         
-        # Plot 1: Accuracy vs Epsilon
+        #Plot 1: Accuracy vs Epsilon
         axes[0, 0].plot(results['epsilon'], results['accuracy'], 
                        'b-o', linewidth=2, markersize=8, label='Model Accuracy')
         axes[0, 0].set_xlabel('Epsilon (ε)', fontsize=12)
@@ -397,7 +365,7 @@ class FGSMAttacker:
         axes[0, 0].grid(True, alpha=0.3)
         axes[0, 0].legend()
         
-        # Plot 2: Attack Success Rate vs Epsilon
+        #Plot 2: Attack Success Rate vs Epsilon
         axes[0, 1].plot(results['epsilon'], results['attack_success_rate'], 
                        'r-s', linewidth=2, markersize=8, label='Attack Success Rate')
         axes[0, 1].set_xlabel('Epsilon (ε)', fontsize=12)
@@ -406,7 +374,7 @@ class FGSMAttacker:
         axes[0, 1].grid(True, alpha=0.3)
         axes[0, 1].legend()
         
-        # Plot 3: L2 and L-inf Perturbation Norms
+        #Plot 3: L2 and L-inf Perturbation Norms
         axes[1, 0].plot(results['epsilon'], results['avg_perturbation_l2'], 
                        'g-^', linewidth=2, markersize=8, label='L2 Norm')
         axes[1, 0].plot(results['epsilon'], results['avg_perturbation_linf'], 
@@ -417,7 +385,7 @@ class FGSMAttacker:
         axes[1, 0].grid(True, alpha=0.3)
         axes[1, 0].legend()
         
-        # Plot 4: Evaluation Time
+        #Plot 4: Evaluation Time
         axes[1, 1].bar(range(len(results['epsilon'])), results['evaluation_time'], 
                       color='skyblue', edgecolor='navy', alpha=0.7)
         axes[1, 1].set_xlabel('Epsilon Value Index', fontsize=12)
@@ -433,138 +401,78 @@ class FGSMAttacker:
         print(f"\n✓ Comprehensive results plot saved to: {plot_path}")
         plt.show()
         
-        # Save results to CSV
         results_df = pd.DataFrame(results)
         csv_path = os.path.join(save_path, 'fgsm_results.csv')
         results_df.to_csv(csv_path, index=False)
         print(f"✓ Results data saved to: {csv_path}")
-    
-    def plot_perturbation_heatmap(self, X_test, y_test, epsilon=0.1, num_samples=5, 
-                                  save_path='./results'):
-        """
-        Visualize perturbations as heatmaps for individual samples
-        """
-        os.makedirs(save_path, exist_ok=True)
-        
-        # Get samples
-        X_tensor = torch.FloatTensor(X_test[:num_samples]).to(self.device)
-        y_tensor = torch.LongTensor(y_test[:num_samples]).to(self.device)
-        
-        # Generate adversarial examples
-        adv_inputs = self.fgsm_attack(X_tensor.clone(), y_tensor, epsilon)
-        perturbation = (adv_inputs - X_tensor).cpu().numpy()
-        
-        # Create visualization
-        fig, axes = plt.subplots(num_samples, 3, figsize=(12, 3*num_samples))
-        if num_samples == 1:
-            axes = axes.reshape(1, -1)
-        
-        for i in range(num_samples):
-            # Original input
-            im1 = axes[i, 0].imshow(X_tensor[i].cpu().numpy().reshape(1, -1), 
-                                    cmap='viridis', aspect='auto')
-            axes[i, 0].set_title(f'Sample {i+1}: Original Input')
-            axes[i, 0].set_ylabel('Features')
-            plt.colorbar(im1, ax=axes[i, 0])
-            
-            # Perturbation
-            im2 = axes[i, 1].imshow(perturbation[i].reshape(1, -1), 
-                                    cmap='RdBu', aspect='auto', 
-                                    vmin=-epsilon, vmax=epsilon)
-            axes[i, 1].set_title(f'Perturbation (ε={epsilon})')
-            plt.colorbar(im2, ax=axes[i, 1])
-            
-            # Adversarial input
-            im3 = axes[i, 2].imshow(adv_inputs[i].cpu().numpy().reshape(1, -1), 
-                                    cmap='viridis', aspect='auto')
-            axes[i, 2].set_title(f'Adversarial Input')
-            plt.colorbar(im3, ax=axes[i, 2])
-        
-        plt.tight_layout()
-        heatmap_path = os.path.join(save_path, 'perturbation_heatmaps.png')
-        plt.savefig(heatmap_path, dpi=300, bbox_inches='tight')
-        print(f"\n✓ Perturbation heatmaps saved to: {heatmap_path}")
-        plt.show()
-
 
 def main():
-    """
-    Main execution - connects to your trained sklearn model
-    """
     print("="*80)
     print("FGSM ADVERSARIAL ATTACK ON POKER HAND CLASSIFIER")
     print("="*80)
     
-    # Load trained sklearn model
+    #Load trained sklearn model
     print("\nLoading trained sklearn model...")
     try:
         with open('best_sklearn_model.pkl', 'rb') as f:
             sklearn_model = pickle.load(f)
-        print("✓ Model loaded successfully")
+        print("Model loaded successfully")
     except FileNotFoundError:
-        print("❌ Error: best_sklearn_model.pkl not found!")
+        print("Error: best_sklearn_model.pkl not found!")
         print("Please run the neural network training script first.")
         return
     
-    # Load test data
+    #Load test data
     print("Loading test data...")
     try:
         X_test = np.load('X_test.npy')
         y_test = np.load('y_test.npy')
-        print(f"✓ Test data loaded: {len(X_test)} samples")
+        print(f"Test data loaded: {len(X_test)} samples")
     except FileNotFoundError:
-        print("❌ Error: Test data files not found!")
+        print("Error: Test data files not found!")
         print("Please run the neural network training script first.")
         return
     
-    # Initialize attacker
+    #Initialize attacker
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     print(f"\nUsing device: {device}")
     
     attacker = FGSMAttacker(sklearn_model, device=device, log_dir='./logs')
     
-    # Run FGSM attack evaluation
+    #Run FGSM attack evaluation
     epsilons = [0, 0.05, 0.1, 0.15, 0.2, 0.25, 0.3]
     results = attacker.evaluate_attack(X_test, y_test, epsilons)
     
-    # Analyze specific samples
     print("\n" + "="*80)
     print("SAMPLE-LEVEL ANALYSIS")
     print("="*80)
     analysis_df = attacker.analyze_sample_predictions(X_test, y_test, epsilon=0.15, num_samples=10)
-    
-    # Evaluate targeted attacks
+
     print("\n" + "="*80)
     print("TARGETED ATTACK ANALYSIS")
     print("="*80)
     targeted_results = attacker.evaluate_targeted_attack(X_test, y_test, epsilon=0.15, num_target_classes=10)
     
-    # Generate visualizations
     print("\n" + "="*80)
     print("GENERATING VISUALIZATIONS")
     print("="*80)
     attacker.plot_accuracy_vs_epsilon(results, save_path='./results')
     attacker.plot_perturbation_heatmap(X_test, y_test, epsilon=0.15, num_samples=5, save_path='./results')
     
-    # Save all results
     print("\n" + "="*80)
     print("SAVING RESULTS")
     print("="*80)
     
-    # Save experiment log
     attacker.save_experiment_log('fgsm_experiment_log.csv')
     
-    # Save sample analysis
     os.makedirs('./results', exist_ok=True)
     analysis_df.to_csv('./results/sample_analysis.csv', index=False)
     print("✓ Sample analysis saved to: ./results/sample_analysis.csv")
     
-    # Save targeted results
     targeted_df = pd.DataFrame(targeted_results)
     targeted_df.to_csv('./results/targeted_attack_results.csv', index=False)
     print("✓ Targeted attack results saved to: ./results/targeted_attack_results.csv")
     
-    # Print final summary
     print("\n" + "="*80)
     print("ATTACK SUMMARY")
     print("="*80)
@@ -574,6 +482,11 @@ def main():
     print(f"Accuracy at ε={epsilons[-1]}:          {final_acc:.2f}%")
     print(f"Accuracy Drop:                 {baseline_acc - final_acc:.2f}%")
     print(f"Max Attack Success Rate:       {max(results['attack_success_rate']):.2f}%")
+    print("="*80)
+    print("\n✓ All results ready for your IEEE conference paper!")
+    print("="*80)
+
 
 if __name__ == "__main__":
     main()
+
