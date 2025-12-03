@@ -106,7 +106,7 @@ class NeuralNet:
 
             if test_accuracy > best_test_acc:
                 best_test_acc = test_accuracy
-                best_model = model  # Keep the actual sklearn model
+                best_model = model  #Keep the actual sklearn model
                 best_activation = activation
                 best_lr = lr
                 best_epochs = max_iter
@@ -190,3 +190,4 @@ if __name__ == "__main__":
     neural_network = NeuralNet(url) 
     neural_network.preprocess()
     neural_network.train_evaluate()
+
